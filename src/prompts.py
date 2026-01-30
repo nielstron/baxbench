@@ -50,11 +50,6 @@ class Prompter:
         "o3-mini": 200000,
         "deepseek-ai/DeepSeek-R1": 164000,
         "google/gemma-2-27b-it": 8192,
-        "deepseek-ai/DeepSeek-R1-Distill-Llama-70B": 131072,
-        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B": 131072,
-        "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": 131072,
-        "Qwen/QwQ-32B": 32768,
-        "qwen/qwq-32b": 128000,
         "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": 524288,
         "meta-llama/Llama-4-Scout-17B-16E-Instruct": 327680,
         "google/gemini-2.5-pro-preview-03-25": 65000,
@@ -89,6 +84,12 @@ class Prompter:
         "eth-sri/deepseek-r1-distill-qwen-7b-cybernative-snyk-kodcodeV1": 32000,
         "openai/gpt-oss-120b": 16384,
         "openai/gpt-oss-20b": 16384,
+        "deepseek-ai/DeepSeek-R1-Distill-Llama-70B": 131072,
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B": 131072,
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": 131072,
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": 131072,
+        "Qwen/QwQ-32B": 32768,
+        "qwen/qwq-32b": 128000,
     }
 
     openai_max_completion_tokens = {
