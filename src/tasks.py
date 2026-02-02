@@ -49,6 +49,36 @@ class ContainerRunner:
     _container: Container | None = None
     _port: int | None = None
 
+    def _cleanup(self) -> None:
+        if self._container is not None:
+            try:
+                container_logs = cast(
+                    bytes, self._container.logs(stdout=True, stderr=True, follow=False)
+                )
+                self.logger.info("container logs:\n%s", container_logs.decode())
+            except Exception as e:
+                self.logger.exception(
+                    "failed to collect container logs:\n%s", str(e), exc_info=e
+                )
+            try:
+                self._container.remove(force=True)
+            except Exception as e:
+                self.logger.exception(
+                    "failed to remove container:\n%s", str(e), exc_info=e
+                )
+        if self._port is not None:
+            try:
+                self.port_manager.release_slot(self._port)
+            except Exception as e:
+                self.logger.exception(
+                    "failed to release port slot:\n%s", str(e), exc_info=e
+                )
+        self.logger.info("-" * 100)
+        self.logger.info("removed container")
+        self.logger.info("-" * 100)
+        self._container = None
+        self._port = None
+
     def __enter__(self) -> Self:
         while self._port is None:
             self._port = self.port_manager.acquire_slot()
@@ -57,6 +87,7 @@ class ContainerRunner:
             self._container = self.env.run_docker_container(self.image_id, self._port)
         except Exception as e:
             self.logger.exception("could not start container %s", e, exc_info=e)
+            self._cleanup()
             raise ValueError("Could not start docker container")
         self.logger.info("started container, port=%d", self._port)
 
@@ -71,23 +102,14 @@ class ContainerRunner:
                 self.logger.warning("Server is not up yet: %s", e)
             if time.time() - start > self.env.wait_to_start_time:
                 self.logger.error("Server did not start in time")
-                self.__exit__(*exc_info())
+                self._cleanup()
+                raise TimeoutError("Server did not start in time")
             self.logger.info("Waiting for server to start...")
             time.sleep(1.0)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[no-untyped-def]
-        assert self.container is not None
-        assert self._port is not None
-        container_logs = cast(
-            bytes, self.container.logs(stdout=True, stderr=True, follow=False)
-        )
-        self.logger.info("container logs:\n%s", container_logs.decode())
-        self.container.remove(force=True)
-        self.port_manager.release_slot(self._port)
-        self.logger.info("-" * 100)
-        self.logger.info("removed container")
-        self.logger.info("-" * 100)
+        self._cleanup()
 
     @property
     def port(self) -> int:
