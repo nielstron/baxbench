@@ -22,6 +22,7 @@ pdfplumber = "*"
 imageio = "*"
 types-pyyaml = "*"
 matplotlib = "*"
+podman = "*"
 
 [requires]
 python_version = "3.12"
