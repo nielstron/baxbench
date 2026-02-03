@@ -138,14 +138,14 @@ class Env:
         logger.info("-" * 100)
         r = _docker_client.images.build(
             fileobj=tar_stream,
-            nocache=no_cache,
+            nocache=True,
             custom_context=True,
             tag=tag,
             rm=True,
             timeout=600,  # 10 minutes max to build the image
             forcerm=True,
             labels={"language": self.language, "framework": self.framework},
-            squash=True,
+            squash=False,
         )
 
         if r[0].id is None:
