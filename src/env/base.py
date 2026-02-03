@@ -242,7 +242,7 @@ class Env:
                 name=f"baxbench-{uid}",
                 detach=True,
                 ports={f"{self.port}/tcp": use_port},
-                auto_remove=False,
+                auto_remove=True,
                 # Set the memory limit to 1GB.
                 mem_limit=2**30,
             ),
