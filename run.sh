@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mapfile -t ENVS < <(
-  uv run python - <<'PY'
+  pipenv run python - <<'PY'
 import sys
 sys.path.insert(0, "src")
 from env import all_envs
@@ -12,7 +12,7 @@ PY
 )
 
 for env in "${ENVS[@]}"; do
-  uv run python src/main.py \
+  pipenv run python src/main.py \
     --models Qwen/QwQ-32B \
     --mode test \
     --n_samples 10 \
