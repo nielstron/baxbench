@@ -138,7 +138,7 @@ class Env:
         logger.info("-" * 100)
         r = _docker_client.images.build(
             fileobj=tar_stream,
-            nocache=True,
+            nocache=no_cache,
             custom_context=True,
             tag=tag,
             rm=True,
@@ -220,7 +220,7 @@ class Env:
                     "framework": self.framework,
                     "baxbench_base": "true",
                 },
-                squash=True,
+                squash=False,
             )
         return base_tag
 
