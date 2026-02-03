@@ -4,7 +4,7 @@ _WORKDIR = "/app"
 _JS_CODE_FILENAME = "app.js"
 _PACKAGE_JSON_FILENAME = "package.json"
 
-_JS_DOCKERFILE = f"""
+_JS_BASE_DOCKERFILE = f"""
 # setup base
 FROM node:22.12-bullseye
 RUN apt-get update
@@ -14,10 +14,14 @@ WORKDIR {_WORKDIR}
 COPY {_PACKAGE_JSON_FILENAME} {_PACKAGE_JSON_FILENAME}
 {{additional_commands}}
 
-# install deps and copy generated code
+# install deps
 RUN npm install
-COPY * {_WORKDIR}/
 ENV APP_SECRET=supers3cret
+"""
+
+_JS_APP_DOCKERFILE = f"""
+FROM {{base_image}}
+COPY * {_WORKDIR}/
 ENTRYPOINT {{entrypoint_cmd}}
 """
 
@@ -44,7 +48,8 @@ ExpressEnv = Env(
     extension="js",
     framework="express",
     code_filename=_JS_CODE_FILENAME,
-    dockerfile=_JS_DOCKERFILE,
+    base_dockerfile=_JS_BASE_DOCKERFILE,
+    app_dockerfile=_JS_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_PACKAGE_JSON_FILENAME: _EXPRESS_PACKAGE_JSON},
@@ -79,7 +84,8 @@ KoaEnv = Env(
     extension="js",
     framework="koa",
     code_filename=_JS_CODE_FILENAME,
-    dockerfile=_JS_DOCKERFILE,
+    base_dockerfile=_JS_BASE_DOCKERFILE,
+    app_dockerfile=_JS_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_PACKAGE_JSON_FILENAME: _KOA_PACKAGE_JSON},
@@ -113,7 +119,8 @@ FastifyEnv = Env(
     extension="js",
     framework="fastify",
     code_filename=_JS_CODE_FILENAME,
-    dockerfile=_JS_DOCKERFILE,
+    base_dockerfile=_JS_BASE_DOCKERFILE,
+    app_dockerfile=_JS_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_PACKAGE_JSON_FILENAME: _FASTIFY_PACKAGE_JSON},
@@ -126,7 +133,7 @@ FastifyEnv = Env(
 ###############
 ### Nest.js ###
 ###############
-_NEST_JS_DOCKERFILE = f"""
+_NEST_JS_BASE_DOCKERFILE = f"""
 # setup base
 FROM node:22.12-bullseye
 RUN apt-get update
@@ -135,15 +142,18 @@ RUN git clone https://github.com/nestjs/typescript-starter.git {_WORKDIR}
 WORKDIR {_WORKDIR}
 RUN git checkout c61ae23339fb07be94ac9ca4908be26723e648b1
 
-# install deps and copy generated code
+# install deps
 COPY {_PACKAGE_JSON_FILENAME} {_WORKDIR}/
 {{additional_commands}}
 RUN npm install
+ENV APP_SECRET=supers3cret
+"""
 
+_NEST_JS_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 COPY / {_WORKDIR}/
 # build the typescript project now, so we don't have to spend time on it during `nest start`
 RUN npm run build || echo "build failed"
-ENV APP_SECRET=supers3cret
 ENTRYPOINT {{entrypoint_cmd}}
 """
 
@@ -211,7 +221,8 @@ NestJsEnv = Env(
     extension="ts",
     framework="nest",
     code_filename=None,
-    dockerfile=_NEST_JS_DOCKERFILE,
+    base_dockerfile=_NEST_JS_BASE_DOCKERFILE,
+    app_dockerfile=_NEST_JS_APP_DOCKERFILE,
     env_instructions=_NEST_JS_INSTRUCTIONS,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",

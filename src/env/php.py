@@ -3,23 +3,28 @@ from env.base import MULTI_FILE_APP_PROMPT_STRUCTURE, SINGLE_FILE_APP_INSRUCTION
 _WORKDIR = "/app"
 _COMPOSER_JSON = "composer.json"
 
-_PHP_DOCKERFILE = f"""
+_PHP_BASE_DOCKERFILE = f"""
 # setup base
 FROM php:8.2-apache-bullseye
 {{additional_commands}}
 RUN apt-get update
 RUN apt-get install -y zip unzip git
 
-# install deps and copy generated code
+# install deps
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 RUN mkdir -p {_WORKDIR}
 WORKDIR {_WORKDIR}
 RUN composer --version
 RUN composer create-project --prefer-dist laravel/lumen .
 ENV APP_SECRET=supers3cret
+COPY {_COMPOSER_JSON} {_COMPOSER_JSON}
+RUN composer install --no-scripts --no-dev --no-autoloader --no-interaction --no-ansi --no-progress --optimize-autoloader || echo "composer install failed"
+"""
+
+_PHP_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 COPY / {_WORKDIR}/
 RUN chmod -R 777 {_WORKDIR}
-RUN composer install --no-scripts --no-dev --no-autoloader --no-interaction --no-ansi --no-progress --optimize-autoloader || echo "composer install failed"
 RUN php artisan cache:clear || echo "php artisan cache:clear failed"
 RUN php artisan migrate -n --force || echo "php artisan migrate failed"
 ENTRYPOINT {{entrypoint_cmd}}
@@ -95,7 +100,8 @@ PhpLaravelLumenEnv = Env(
     framework="Lumen",
     code_filename=None,
     env_instructions=_LARAVEL_ENV_INSTRUCTIONS,
-    dockerfile=_PHP_DOCKERFILE,
+    base_dockerfile=_PHP_BASE_DOCKERFILE,
+    app_dockerfile=_PHP_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={

@@ -5,7 +5,7 @@ _SRC_FILENAME = "main.rs"
 _CARGO_TOML = "Cargo.toml"
 
 _EMPTY_BRACKETS = "{{ App::new() }}"
-_RUST_DOCKERFILE = f"""
+_RUST_BASE_DOCKERFILE = f"""
 #setup base
 FROM rust:1.83.0-bullseye
 {{additional_commands}}
@@ -20,6 +20,10 @@ ENV RUST_BACKTRACE=1
 RUN mkdir -p {_WORKDIR}/src
 RUN echo "use actix_web::App; fn main() {_EMPTY_BRACKETS}" > src/{_SRC_FILENAME}
 RUN cargo build || echo "Build failed"
+"""
+
+_RUST_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 
 # build the generated code
 COPY {_SRC_FILENAME} src/{_SRC_FILENAME}
@@ -57,7 +61,8 @@ RustActixEnv = Env(
     framework="Actix",
     env_instructions=SINGLE_FILE_APP_INSRUCTIONS,
     code_filename=_SRC_FILENAME,
-    dockerfile=_RUST_DOCKERFILE,
+    base_dockerfile=_RUST_BASE_DOCKERFILE,
+    app_dockerfile=_RUST_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_CARGO_TOML: _CARGO_ACTIX},

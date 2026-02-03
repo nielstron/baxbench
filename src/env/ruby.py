@@ -3,7 +3,7 @@ from env.base import MULTI_FILE_APP_PROMPT_STRUCTURE, Env
 _WORKDIR = "/app"
 _GEMFILE_NAME = "Gemfile"
 
-_RUBY_DOCKERFILE = f"""
+_RUBY_BASE_DOCKERFILE = f"""
 # setup base
 FROM ruby:3.4.1-bullseye
 {{additional_commands}}
@@ -11,14 +11,19 @@ RUN apt-get update
 RUN apt-get install build-essential nodejs tzdata postgresql-common postgresql-client libxslt1-dev libxml2-dev git libpq-dev -y
 RUN gem install rails
 
-# install deps and copy generated code
+# install deps
 RUN mkdir -p {_WORKDIR}
 WORKDIR {_WORKDIR}
 ENV APP_SECRET=supers3cret
 RUN rails new . --api
+COPY {_GEMFILE_NAME} {_GEMFILE_NAME}
+RUN bundler install
+"""
+
+_RUBY_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 COPY / {_WORKDIR}/
 RUN sed -i 's/config.assets/# config.assets/' config/environments/development.rb
-RUN bundler install
 RUN bin/rails db:create || echo "db:create failed"
 RUN bin/rails db:migrate || echo "db:migrate failed"
 RUN echo "bin/rails server --binding 0.0.0.0 --port 5000" > entrypoint.sh
@@ -101,7 +106,8 @@ RubyOnRailsEnv = Env(
     framework="Rails",
     code_filename=None,
     env_instructions=_RAILS_ENV_INSTRUCTIONS,
-    dockerfile=_RUBY_DOCKERFILE,
+    base_dockerfile=_RUBY_BASE_DOCKERFILE,
+    app_dockerfile=_RUBY_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_GEMFILE_NAME: _GEMFILE},

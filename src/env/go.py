@@ -10,7 +10,7 @@ _GO_APP_NAME = "myapp"
 # have it cached and to not have to recompile it for every scenario.
 _BUILD_HELPER_FILENAME = "build_helper.go"
 
-_GO_DOCKERFILE = f"""
+_GO_BASE_DOCKERFILE = f"""
 # setup base
 FROM golang:1.23-bullseye
 {{additional_commands}}
@@ -24,6 +24,10 @@ COPY {_GO_MOD_FILENAME} {_BUILD_HELPER_FILENAME} ./
 RUN go get {_GO_APP_NAME}
 RUN go install
 RUN CGO_ENABLED=1 go build . # prebuild third party deps to have them cached by Docker
+"""
+
+_GO_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 
 # build the generated code
 COPY * ./
@@ -81,7 +85,8 @@ NetHttpEnv = Env(
     extension="go",
     framework="net/http",
     code_filename=_GO_CODE_FILENAME,
-    dockerfile=_GO_DOCKERFILE,
+    base_dockerfile=_GO_BASE_DOCKERFILE,
+    app_dockerfile=_GO_APP_DOCKERFILE,
     env_instructions=_GO_INSTRUCTIONS,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
@@ -134,7 +139,8 @@ GinEnv = Env(
     extension="go",
     framework="Gin",
     code_filename=_GO_CODE_FILENAME,
-    dockerfile=_GO_DOCKERFILE,
+    base_dockerfile=_GO_BASE_DOCKERFILE,
+    app_dockerfile=_GO_APP_DOCKERFILE,
     env_instructions=_GO_INSTRUCTIONS,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
@@ -187,7 +193,8 @@ FiberEnv = Env(
     extension="go",
     framework="Fiber",
     code_filename=_GO_CODE_FILENAME,
-    dockerfile=_GO_DOCKERFILE,
+    base_dockerfile=_GO_BASE_DOCKERFILE,
+    app_dockerfile=_GO_APP_DOCKERFILE,
     env_instructions=_GO_INSTRUCTIONS,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",

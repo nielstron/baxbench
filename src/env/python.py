@@ -4,17 +4,21 @@ _WORKDIR = "/app"
 _PYTHON_CODE_FILENAME = "app.py"
 _REQS_TXT_FILENAME = "requirements.txt"
 
-_PYTHON_DOCKERFILE = f"""
+_PYTHON_BASE_DOCKERFILE = f"""
 # setup base
 FROM nikolaik/python-nodejs:python3.12-nodejs22-bullseye
 {{additional_commands}}
 
-# install deps and copy generated code
+# install deps
 RUN mkdir -p {_WORKDIR}
 WORKDIR {_WORKDIR}
 COPY {_REQS_TXT_FILENAME} {_REQS_TXT_FILENAME}
 RUN python3 -m pip install -r requirements.txt
 ENV APP_SECRET=supers3cret
+"""
+
+_PYTHON_APP_DOCKERFILE = f"""
+FROM {{base_image}}
 COPY / {_WORKDIR}/
 ENTRYPOINT {{entrypoint_cmd}}
 """
@@ -43,7 +47,8 @@ FlaskEnv = Env(
     framework="Flask",
     env_instructions=SINGLE_FILE_APP_INSRUCTIONS,
     code_filename=_PYTHON_CODE_FILENAME,
-    dockerfile=_PYTHON_DOCKERFILE,
+    base_dockerfile=_PYTHON_BASE_DOCKERFILE,
+    app_dockerfile=_PYTHON_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_REQS_TXT_FILENAME: _FLASK_REQS_TXT},
@@ -104,7 +109,8 @@ FastAPIEnv = Env(
     framework="FastAPI",
     code_filename=_PYTHON_CODE_FILENAME,
     env_instructions=_FAST_API_INSTRUCTIONS,
-    dockerfile=_PYTHON_DOCKERFILE,
+    base_dockerfile=_PYTHON_BASE_DOCKERFILE,
+    app_dockerfile=_PYTHON_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_REQS_TXT_FILENAME: _FAST_API_REQS_TXT},
@@ -150,20 +156,21 @@ Make sure that the endpoints don't have trailing slashes!
 Set the ALLOWED_HOSTS to ["0.0.0.0", "localhost", "127.0.0.1"]
 Make sure that the command `python manage.py runserver` starts the app successfully.
 """
-_DJANGO_DOCKERFILE = "\n".join(
-    [
-        _PYTHON_DOCKERFILE,
-        "RUN python3 manage.py makemigrations myapp || echo 'makemigrations failed'",
-        "RUN python3 manage.py migrate || echo 'migrate failed'",
-    ]
-)
+_DJANGO_APP_DOCKERFILE = f"""
+FROM {{base_image}}
+COPY / {_WORKDIR}/
+RUN python3 manage.py makemigrations myapp || echo 'makemigrations failed'
+RUN python3 manage.py migrate || echo 'migrate failed'
+ENTRYPOINT {{entrypoint_cmd}}
+"""
 DjangoEnv = Env(
     language="Python",
     extension="py",
     framework="Django",
     code_filename=None,
     env_instructions=_DJANGO_INSTRUCTIONS,
-    dockerfile=_DJANGO_DOCKERFILE,
+    base_dockerfile=_PYTHON_BASE_DOCKERFILE,
+    app_dockerfile=_DJANGO_APP_DOCKERFILE,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",
     manifest_files={_REQS_TXT_FILENAME: _DJANGO_REQS_TXT},
@@ -195,7 +202,8 @@ AioHttpEnv = Env(
     extension="py",
     framework="aiohttp",
     code_filename=_PYTHON_CODE_FILENAME,
-    dockerfile=_PYTHON_DOCKERFILE,
+    base_dockerfile=_PYTHON_BASE_DOCKERFILE,
+    app_dockerfile=_PYTHON_APP_DOCKERFILE,
     env_instructions=SINGLE_FILE_APP_INSRUCTIONS,
     workdir=_WORKDIR,
     sqlite_database="db.sqlite3",

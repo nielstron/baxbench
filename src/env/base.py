@@ -1,9 +1,11 @@
+import fcntl
+import hashlib
 import io
 import logging
-import os
 import pathlib
 import tarfile
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
@@ -14,6 +16,21 @@ from docker.models.containers import Container
 _docker_client = docker.from_env()
 
 
+@contextmanager
+def _base_build_lock(base_tag: str) -> Any:
+    safe_tag = "".join(
+        ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in base_tag
+    )
+    lock_path = pathlib.Path(f"/tmp/baxbench_base_build_{safe_tag}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
 type DatabaseTest = Callable[[str], bool]
 
 
@@ -22,7 +39,8 @@ class Env:
     language: str
     extension: str
     framework: str
-    dockerfile: str
+    base_dockerfile: str
+    app_dockerfile: str
     workdir: str
     sqlite_database: str
     manifest_files: dict[str, str]
@@ -73,13 +91,11 @@ class Env:
         self,
         additional_docker_commands: list[str],
     ) -> str:
-        final_dockerfile = self.dockerfile.format(
+        base_tag = self.base_image_tag(additional_docker_commands)
+        return self.app_dockerfile.format(
             entrypoint_cmd=self.entrypoint_cmd,
-            additional_commands="\n".join(
-                [f"RUN {cmd}" for cmd in additional_docker_commands]
-            ),
+            base_image=base_tag,
         )
-        return final_dockerfile
 
     def build_docker_image(
         self,
@@ -88,13 +104,15 @@ class Env:
         logger: logging.Logger,
         no_cache: bool,
     ) -> str:
-        logger.info("building the Docker image")
+        logger.info("ensuring base Docker image")
+        base_tag = self.ensure_base_image(
+            additional_docker_commands, logger, no_cache=no_cache
+        )
+        logger.info("building the sample Docker image")
         tar_stream = io.BytesIO()
-        final_dockerfile = self.dockerfile.format(
+        final_dockerfile = self.app_dockerfile.format(
             entrypoint_cmd=self.entrypoint_cmd,
-            additional_commands="\n".join(
-                [f"RUN {cmd}" for cmd in additional_docker_commands]
-            ),
+            base_image=base_tag,
         )
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
 
@@ -115,7 +133,7 @@ class Env:
 
         # Build the Docker image using the tar file.
         lang, frw = self.language.replace("-", "_"), self.framework.replace("-", "_")
-        tag = f"baxbench_{lang}_{frw}".lower()
+        tag = f"baxbench_{lang}_{frw}_sample_{uuid.uuid4().hex[:12]}".lower()
         logger.info("Files copied, building the image")
         logger.info("-" * 100)
         r = _docker_client.images.build(
@@ -133,6 +151,87 @@ class Env:
         if r[0].id is None:
             raise Exception(f"got a None image id: {r}")
         return r[0].id
+
+    def base_image_tag(self, additional_docker_commands: list[str]) -> str:
+        hash_input = "\n".join(
+            [
+                self.base_dockerfile,
+                "\n".join(additional_docker_commands),
+                "\n".join(f"{k}:{v}" for k, v in sorted(self.manifest_files.items())),
+            ]
+        )
+        digest = hashlib.sha256(hash_input.encode()).hexdigest()[:12]
+        lang, frw = self.language.replace("-", "_"), self.framework.replace("-", "_")
+        return f"baxbench_base_{lang}_{frw}_{digest}".lower()
+
+    def ensure_base_image(
+        self,
+        additional_docker_commands: list[str],
+        logger: logging.Logger,
+        no_cache: bool,
+    ) -> str:
+        base_tag = self.base_image_tag(additional_docker_commands)
+        try:
+            _docker_client.images.get(base_tag)
+            logger.info("base image already present: %s", base_tag)
+            return base_tag
+        except docker.errors.ImageNotFound:
+            logger.info("base image missing, building: %s", base_tag)
+
+        with _base_build_lock(base_tag):
+            try:
+                _docker_client.images.get(base_tag)
+                logger.info("base image already present: %s", base_tag)
+                return base_tag
+            except docker.errors.ImageNotFound:
+                logger.info("building base image under lock: %s", base_tag)
+
+            tar_stream = io.BytesIO()
+            base_dockerfile = self.base_dockerfile.format(
+                additional_commands="\n".join(
+                    [f"RUN {cmd}" for cmd in additional_docker_commands]
+                ),
+            )
+            with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+
+                def add_file(path: str, content: str) -> None:
+                    file_data = io.BytesIO(content.encode())
+                    tarinfo = tarfile.TarInfo(name=path)
+                    tarinfo.size = len(file_data.getvalue())
+                    tar.addfile(tarinfo, fileobj=file_data)
+                    logger.info("copying base file: %s\n%s", path, content)
+                    logger.info("-" * 100)
+
+                add_file("Dockerfile", base_dockerfile)
+                for manifest_path, content in self.manifest_files.items():
+                    add_file(manifest_path, content)
+            tar_stream.seek(0)
+
+            _docker_client.images.build(
+                fileobj=tar_stream,
+                nocache=no_cache,
+                custom_context=True,
+                tag=base_tag,
+                rm=True,
+                timeout=600,
+                forcerm=True,
+                labels={
+                    "language": self.language,
+                    "framework": self.framework,
+                    "baxbench_base": "true",
+                },
+                squash=True,
+            )
+        return base_tag
+
+    def remove_docker_image(self, image_id: str, logger: logging.Logger) -> None:
+        try:
+            _docker_client.images.remove(image=image_id, force=True, noprune=False)
+            logger.info("removed sample image: %s", image_id)
+        except docker.errors.ImageNotFound:
+            logger.warning("sample image already removed: %s", image_id)
+        except Exception as e:
+            logger.exception("failed to remove sample image: %s", image_id, exc_info=e)
 
     def run_docker_container(self, image_id: str, use_port: int) -> Container:
         uid = uuid.uuid4()

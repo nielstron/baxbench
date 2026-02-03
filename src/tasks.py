@@ -390,108 +390,115 @@ class Task:
                         logger.info("-" * 100)
                         continue
 
-                logger.info("done building docker image. id: %s", image_id)
-                logger.info("-" * 100)
+                try:
+                    logger.info("done building docker image. id: %s", image_id)
+                    logger.info("-" * 100)
 
-                result = TestResult()
-                for ft in self.scenario.functional_tests:
-                    logger.info("running functional test:\n%s", inspect.getsource(ft))
+                    result = TestResult()
+                    for ft in self.scenario.functional_tests:
+                        logger.info("running functional test:\n%s", inspect.getsource(ft))
 
-                    passed = False
-                    had_exception = False
-                    try:
-                        with ContainerRunner(
-                            self.env, port_manager, image_id, logger
-                        ) as cr:
-                            server_ran_before = self.env.process_still_running(
-                                cr.container.id, logger
-                            )
-                            passed = run_test_with_timeout(
-                                ft,
-                                AppInstance(
-                                    port=cr.port,
-                                    log_file_path=sample_dir / (ft.__name__ + ".log"),
-                                    container_id=cr.container.id,
-                                    env=self.env,
-                                ),
-                                timeout,
-                            )
-                            if (
-                                not self.env.process_still_running(
+                        passed = False
+                        had_exception = False
+                        try:
+                            with ContainerRunner(
+                                self.env, port_manager, image_id, logger
+                            ) as cr:
+                                server_ran_before = self.env.process_still_running(
                                     cr.container.id, logger
                                 )
-                                and server_ran_before
-                            ):
-                                # something crashed the server process, this should be logged as cwe 703
-                                logger.warning(
-                                    "server process crashed during functional test"
+                                passed = run_test_with_timeout(
+                                    ft,
+                                    AppInstance(
+                                        port=cr.port,
+                                        log_file_path=sample_dir
+                                        / (ft.__name__ + ".log"),
+                                        container_id=cr.container.id,
+                                        env=self.env,
+                                    ),
+                                    timeout,
                                 )
-                                result.record_st_result(
-                                    {
-                                        cwe.CWE.IMPROPER_CHECK_OR_HANDLING_OF_EXCEPTIONAL_CONDITIONS
-                                    }
-                                )
-                    except Exception as e:
-                        logger.exception("got exception:\n%s", str(e), exc_info=e)
-                        had_exception = True
-                    logger.info(
-                        f"Functional test {ft.__name__} {'passed' if passed else 'failed'}"
-                    )
-                    result.record_ft_result(passed=passed, had_exception=had_exception)
-                    logger.info("-" * 80)
-
-                for st in self.scenario.security_tests:
-                    logger.info("running security test:\n%s", inspect.getsource(st))
-                    cwes: set[cwe.CWE] | None = None
-                    try:
-                        with ContainerRunner(
-                            self.env, port_manager, image_id, logger
-                        ) as cr:
-                            server_ran_before = self.env.process_still_running(
-                                cr.container.id, logger
-                            )
-                            cwes = run_test_with_timeout(
-                                st,
-                                AppInstance(
-                                    port=cr.port,
-                                    log_file_path=sample_dir / (st.__name__ + ".log"),
-                                    container_id=cr.container.id,
-                                    env=self.env,
-                                ),
-                                timeout,
-                            )
-                            if (
-                                not self.env.process_still_running(
-                                    cr.container.id, logger
-                                )
-                                and server_ran_before
-                            ):
-                                # something crashed the server process, this should be logged as cwe 703
-                                logger.warning(
-                                    "server process crashed during security test"
-                                )
-                                if cwes is None:
-                                    cwes = set()
-                                # Only add 703 if 400 (uncontrolled resource consumption) did not cause the crash
                                 if (
-                                    not cwe.CWE.UNCONTROLLED_RESOURCE_CONSUMPTION
-                                    in cwes
-                                ):
-                                    cwes.add(
-                                        cwe.CWE.IMPROPER_CHECK_OR_HANDLING_OF_EXCEPTIONAL_CONDITIONS
+                                    not self.env.process_still_running(
+                                        cr.container.id, logger
                                     )
-                    except Exception as e:
-                        logger.exception("got exception:\n%s", str(e), exc_info=e)
-                    logger.info(
-                        f"Security test {st.__name__} {'passed' if not cwes else 'failed'}"
-                    )
-                    result.record_st_result(cwes)
-                    logger.info("-" * 80)
+                                    and server_ran_before
+                                ):
+                                    # something crashed the server process, this should be logged as cwe 703
+                                    logger.warning(
+                                        "server process crashed during functional test"
+                                    )
+                                    result.record_st_result(
+                                        {
+                                            cwe.CWE.IMPROPER_CHECK_OR_HANDLING_OF_EXCEPTIONAL_CONDITIONS
+                                        }
+                                    )
+                        except Exception as e:
+                            logger.exception("got exception:\n%s", str(e), exc_info=e)
+                            had_exception = True
+                        logger.info(
+                            f"Functional test {ft.__name__} {'passed' if passed else 'failed'}"
+                        )
+                        result.record_ft_result(
+                            passed=passed, had_exception=had_exception
+                        )
+                        logger.info("-" * 80)
 
-                logger.info("finished testing sample %d", sample)
-                self.save_test_results(result, results_dir, sample)
-                logger.info("saved test results")
-                logger.info("-" * 100)
+                    for st in self.scenario.security_tests:
+                        logger.info("running security test:\n%s", inspect.getsource(st))
+                        cwes: set[cwe.CWE] | None = None
+                        try:
+                            with ContainerRunner(
+                                self.env, port_manager, image_id, logger
+                            ) as cr:
+                                server_ran_before = self.env.process_still_running(
+                                    cr.container.id, logger
+                                )
+                                cwes = run_test_with_timeout(
+                                    st,
+                                    AppInstance(
+                                        port=cr.port,
+                                        log_file_path=sample_dir
+                                        / (st.__name__ + ".log"),
+                                        container_id=cr.container.id,
+                                        env=self.env,
+                                    ),
+                                    timeout,
+                                )
+                                if (
+                                    not self.env.process_still_running(
+                                        cr.container.id, logger
+                                    )
+                                    and server_ran_before
+                                ):
+                                    # something crashed the server process, this should be logged as cwe 703
+                                    logger.warning(
+                                        "server process crashed during security test"
+                                    )
+                                    if cwes is None:
+                                        cwes = set()
+                                    # Only add 703 if 400 (uncontrolled resource consumption) did not cause the crash
+                                    if (
+                                        not cwe.CWE.UNCONTROLLED_RESOURCE_CONSUMPTION
+                                        in cwes
+                                    ):
+                                        cwes.add(
+                                            cwe.CWE.IMPROPER_CHECK_OR_HANDLING_OF_EXCEPTIONAL_CONDITIONS
+                                        )
+                        except Exception as e:
+                            logger.exception("got exception:\n%s", str(e), exc_info=e)
+                        logger.info(
+                            f"Security test {st.__name__} {'passed' if not cwes else 'failed'}"
+                        )
+                        result.record_st_result(cwes)
+                        logger.info("-" * 80)
+
+                    logger.info("finished testing sample %d", sample)
+                    self.save_test_results(result, results_dir, sample)
+                    logger.info("saved test results")
+                    logger.info("-" * 100)
+                finally:
+                    self.env.remove_docker_image(image_id, logger)
 
     def evaluate_results(
         self, results_dir: pathlib.Path, samples: list[int], ks: list[int]
