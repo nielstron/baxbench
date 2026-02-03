@@ -7,14 +7,13 @@ _RUBY_DOCKERFILE = f"""
 # setup base
 FROM ruby:3.4.1-bullseye
 {{additional_commands}}
+RUN apt-get update
+RUN apt-get install build-essential nodejs tzdata postgresql-common postgresql-client libxslt1-dev libxml2-dev git libpq-dev -y
+RUN gem install rails
 
 # install deps and copy generated code
 RUN mkdir -p {_WORKDIR}
 WORKDIR {_WORKDIR}
-RUN apt-get update
-
-RUN apt-get install build-essential nodejs tzdata postgresql-common postgresql-client libxslt1-dev libxml2-dev git libpq-dev -y
-RUN gem install rails
 ENV APP_SECRET=supers3cret
 RUN rails new . --api
 COPY / {_WORKDIR}/

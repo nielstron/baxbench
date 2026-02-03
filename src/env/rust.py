@@ -9,10 +9,10 @@ _RUST_DOCKERFILE = f"""
 #setup base
 FROM rust:1.83.0-bullseye
 {{additional_commands}}
-
-# prebuild/prefetch deps
 RUN apt-get update
 RUN apt-get install imagemagick musl-dev sqlite3 libsqlite3-dev build-essential git -y
+
+# prebuild/prefetch deps
 RUN mkdir -p {_WORKDIR} {_WORKDIR}/src
 WORKDIR {_WORKDIR}
 COPY {_CARGO_TOML} {_CARGO_TOML}

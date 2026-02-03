@@ -7,14 +7,14 @@ _PHP_DOCKERFILE = f"""
 # setup base
 FROM php:8.2-apache-bullseye
 {{additional_commands}}
+RUN apt-get update
+RUN apt-get install -y zip unzip git
 
 # install deps and copy generated code
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 RUN mkdir -p {_WORKDIR}
 WORKDIR {_WORKDIR}
 RUN composer --version
-RUN apt-get update
-RUN apt-get install -y zip unzip git
 RUN composer create-project --prefer-dist laravel/lumen .
 ENV APP_SECRET=supers3cret
 COPY / {_WORKDIR}/

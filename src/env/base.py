@@ -127,6 +127,7 @@ class Env:
             timeout=600,  # 10 minutes max to build the image
             forcerm=True,
             labels={"language": self.language, "framework": self.framework},
+            squash=True,
         )
 
         if r[0].id is None:

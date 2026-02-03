@@ -14,11 +14,11 @@ _GO_DOCKERFILE = f"""
 # setup base
 FROM golang:1.23-bullseye
 {{additional_commands}}
+RUN apt-get install gcc build-essential -y # Required to make CGO work
+RUN go install golang.org/x/tools/cmd/goimports@v0.36.0
 
 # prebuild/prefetch deps
 RUN mkdir -p {_WORKDIR}
-RUN apt-get install gcc build-essential -y # Required to make CGO work
-RUN go install golang.org/x/tools/cmd/goimports@v0.36.0
 WORKDIR {_WORKDIR}
 COPY {_GO_MOD_FILENAME} {_BUILD_HELPER_FILENAME} ./
 RUN go get {_GO_APP_NAME}
