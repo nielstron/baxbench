@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mapfile -t SCENARIOS < <(
+mapfile -t ENVS < <(
   uv run python - <<'PY'
 import sys
 sys.path.insert(0, "src")
-from scenarios import all_scenarios
-for scenario in all_scenarios:
-    print(scenario.id)
+from env import all_envs
+for env in all_envs:
+    print(env.id)
 PY
 )
 
-for scenario in "${SCENARIOS[@]}"; do
+for env in "${ENVS[@]}"; do
   uv run python src/main.py \
     --models Qwen/QwQ-32B \
     --mode test \
     --n_samples 10 \
     --temperature 0.4 \
     -f \
-    --scenarios "$scenario"
+    --envs "$env"
   docker system prune -f
 done
