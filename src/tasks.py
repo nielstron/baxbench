@@ -16,7 +16,7 @@ from typing import Any, Generator, Self, cast
 
 import requests
 import tqdm
-from docker.models.containers import Container
+from podman.domain.containers import Container
 
 import cwes as cwe
 from env.base import COMMON_DOCKER_RUN_COMMANDS, Env

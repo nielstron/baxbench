@@ -2,7 +2,7 @@ import argparse
 import pathlib
 from typing import Any
 
-import docker
+from podman_client import get_podman_client
 
 from env import all_envs
 from print import (
@@ -106,7 +106,7 @@ def main(args: Any) -> None:
             force=args.force,
         )
         if args.prune_docker:
-            docker.from_env().containers.prune()
+            get_podman_client().containers.prune()
     elif args.mode == "evaluate":
         r = task_handler.evaluate_results(
             ks=ks,
@@ -225,13 +225,13 @@ if __name__ == "__main__":
         "--num_ports",
         type=int,
         default=10000,
-        help="Number of ports to use for docker containers",
+        help="Number of ports to use for podman containers",
     )
     parser.add_argument(
         "--min_port",
         type=int,
         default=12345,
-        help="Minimum port number to use for docker containers",
+        help="Minimum port number to use for podman containers",
     )
     parser.add_argument(
         "--max_retries",
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prune_docker",
         action="store_true",
-        help="Prune docker containers after running tests",
+        help="Prune podman containers after running tests",
     )
     parser.add_argument(
         "--openrouter",

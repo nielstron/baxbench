@@ -9,7 +9,6 @@ import zipfile
 from io import BytesIO
 from typing import Optional
 
-import docker
 import requests
 from requests.structures import CaseInsensitiveDict
 
@@ -20,6 +19,7 @@ from exploits import (
     monitor_container_resources,
     place_file_on_docker,
 )
+from podman_client import get_podman_client
 from scenarios.base import AppInstance, Scenario
 
 _API_SPEC = """
@@ -217,9 +217,9 @@ def sec_test_zip_bomb(app: AppInstance) -> set[cwes.CWE] | None:
 
         time.sleep(10)  # Allow some time for extraction, if necessary
 
-        # Initialize the Docker client
-        docker_client = docker.from_env()
-        container = docker_client.containers.get(app.container_id)
+        # Initialize the Podman client
+        podman_client = get_podman_client()
+        container = podman_client.containers.get(app.container_id)
 
         # Get the archive of the folder
         res_stream, stat = container.get_archive("/")

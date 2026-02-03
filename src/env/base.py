@@ -9,11 +9,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
-import docker
-import docker.errors
-from docker.models.containers import Container
+from podman.domain.containers import Container
+from podman.errors import APIError, ImageNotFound
 
-_docker_client = docker.from_env()
+from podman_client import get_podman_client
+
+_podman_client = get_podman_client()
 
 
 @contextmanager
@@ -136,7 +137,7 @@ class Env:
         tag = f"baxbench_{lang}_{frw}_sample_{uuid.uuid4().hex[:12]}".lower()
         logger.info("Files copied, building the image")
         logger.info("-" * 100)
-        r = _docker_client.images.build(
+        r = _podman_client.images.build(
             fileobj=tar_stream,
             nocache=no_cache,
             custom_context=True,
@@ -172,18 +173,18 @@ class Env:
     ) -> str:
         base_tag = self.base_image_tag(additional_docker_commands)
         try:
-            _docker_client.images.get(base_tag)
+            _podman_client.images.get(base_tag)
             logger.info("base image already present: %s", base_tag)
             return base_tag
-        except docker.errors.ImageNotFound:
+        except ImageNotFound:
             logger.info("base image missing, building: %s", base_tag)
 
         with _base_build_lock(base_tag):
             try:
-                _docker_client.images.get(base_tag)
+                _podman_client.images.get(base_tag)
                 logger.info("base image already present: %s", base_tag)
                 return base_tag
-            except docker.errors.ImageNotFound:
+            except ImageNotFound:
                 logger.info("building base image under lock: %s", base_tag)
 
             tar_stream = io.BytesIO()
@@ -207,7 +208,7 @@ class Env:
                     add_file(manifest_path, content)
             tar_stream.seek(0)
 
-            _docker_client.images.build(
+            _podman_client.images.build(
                 fileobj=tar_stream,
                 nocache=no_cache,
                 custom_context=True,
@@ -226,9 +227,9 @@ class Env:
 
     def remove_docker_image(self, image_id: str, logger: logging.Logger) -> None:
         try:
-            _docker_client.images.remove(image=image_id, force=True, noprune=False)
+            _podman_client.images.remove(image=image_id, force=True, noprune=False)
             logger.info("removed sample image: %s", image_id)
-        except docker.errors.ImageNotFound:
+        except ImageNotFound:
             logger.warning("sample image already removed: %s", image_id)
         except Exception as e:
             logger.exception("failed to remove sample image: %s", image_id, exc_info=e)
@@ -237,7 +238,7 @@ class Env:
         uid = uuid.uuid4()
         return cast(
             Container,
-            _docker_client.containers.run(
+            _podman_client.containers.run(
                 image_id,
                 name=f"baxbench-{uid}",
                 detach=True,
@@ -250,19 +251,18 @@ class Env:
 
     def process_still_running(self, container_id: str, logger: logging.Logger) -> bool:
         # extract command that started container process
-        _docker_client = docker.from_env()
-        container: Container = _docker_client.containers.get(container_id)
+        container: Container = _podman_client.containers.get(container_id)
         logger.info(f"Checking if process is still running: {self.entrypoint_cmd}")
         # log into container and check if process is still running
         try:
-            exit_code, output = container.exec_run(f"ps aux")
+            exit_code, output = container.exec_run("ps aux")
             logger.debug(f"Processes running status: {output}")
             if any(self.entrypoint_cmd in line for line in output.decode().split("\n")):
                 logger.info(f"Processes still running")
                 return True
             logger.info(f"Processes not running, assumed to have crashed")
             return False
-        except docker.errors.APIError as e:
+        except APIError as e:
             logger.warning(f"Got exception while checking process status: {e}")
             return False
 
