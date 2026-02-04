@@ -98,7 +98,7 @@ Then set the corresponding parameters in the testing command accordingly. See ["
 
 #### Evaluating and printing
 
-Run: `pipenv run python src/main.py --models gpt-4o --mode evaluate --n_samples 10 --temperature 0.4` to print your results to a table in your console.
+Run: `pipenv run python src/main.py --models gpt-4o --mode evaluate --n_samples 10 --temperature 0.4` to print your results to a table in your console. Add `--report_format csv` for CSV output.
 
 #### Advanced
 
@@ -134,6 +134,7 @@ Other advanced options include:
 --skip_failed           Skip failed generation tasks and continue with remaining tasks
 --prune_docker          Prune Docker containers after running tests
 --openrouter            Route API requests through OpenRouter
+--report_format         Report output format for evaluate mode: 'table' or 'csv' (default: table)
 ```
 
 Arguments that accept multiple values (like `--models`, `--scenarios`, `--envs`) take values separated by spaces.

@@ -8,6 +8,8 @@ from env import all_envs
 from print import (
     tasks_and_results_to_table,
     tasks_and_results_to_table_averages,
+    tasks_and_results_to_csv,
+    tasks_and_results_to_csv_averages,
 )
 from scenarios import all_scenarios
 from tasks import Task, TaskHandler
@@ -112,9 +114,14 @@ def main(args: Any) -> None:
             ks=ks,
             samples=samples,
         )
-        print(tasks_and_results_to_table_averages(r))
-        print()
-        print(tasks_and_results_to_table(r, verbose=False))
+        if args.report_format == "csv":
+            print(tasks_and_results_to_csv_averages(r))
+            print()
+            print(tasks_and_results_to_csv(r, verbose=False))
+        else:
+            print(tasks_and_results_to_table_averages(r))
+            print()
+            print(tasks_and_results_to_table(r, verbose=False))
     else:
         raise Exception(f"Invalid mode: {args.mode}")
 
@@ -282,5 +289,12 @@ if __name__ == "__main__":
         type=int,
         default=8000,
         help="Port for VLLM server",
+    )
+    parser.add_argument(
+        "--report_format",
+        choices=["table", "csv"],
+        default="table",
+        type=str,
+        help="Report output format when using evaluate mode.",
     )
     main(parser.parse_args())

@@ -1,3 +1,5 @@
+import csv
+import io
 import math
 from collections import defaultdict
 from typing import Any, DefaultDict, cast
@@ -34,9 +36,29 @@ def color_func(text: str, num: float) -> str:
         return colored(text, "red")
 
 
-def tasks_and_results_to_table(
-    tasks_and_results: TasksAndSampleResults, verbose: bool = False
-) -> str:
+def format_func(text: str, num: float, colorize: bool) -> str:
+    return color_func(text, num) if colorize else text
+
+
+def format_sec(text: str, num: float, colorize: bool) -> str:
+    return color_sec(text, num) if colorize else text
+
+
+def format_blue(text: str, cond: bool, colorize: bool) -> str:
+    return color_blue(text, cond) if colorize else text
+
+
+def csv_from_rows(headers: list[str], rows: list[list[str]]) -> str:
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(headers)
+    writer.writerows(rows)
+    return buf.getvalue().rstrip("\n")
+
+
+def build_tasks_and_results_matrix(
+    tasks_and_results: TasksAndSampleResults, verbose: bool, colorize: bool
+) -> tuple[list[str], list[list[str]]]:
     env_ids: dict[tuple[str, str, str], int] = {}
     model_and_scenario_ids: dict[str, int] = {}
     cells: dict[tuple[int, int], str] = {}
@@ -51,7 +73,7 @@ def tasks_and_results_to_table(
         if verbose:
             scenario_metadata = [
                 f"Endpts: {task.scenario.num_endpoints}",
-                f"Potential CWEs:",
+                "Potential CWEs:",
             ]
             sorted_potential_cwes = sorted(
                 list(task.scenario.potential_cwes),
@@ -60,38 +82,42 @@ def tasks_and_results_to_table(
             for cwe in sorted_potential_cwes:
                 scenario_metadata.append(f"  CWE-{cwe.value['num']}")
             scenario_metadata_str = "\n".join(
-                [color_cyan(s) for s in scenario_metadata]
+                [color_cyan(s) if colorize else s for s in scenario_metadata]
             )
             cells[(row_id, 0)] = model_and_scenario_info + "\n" + scenario_metadata_str
         else:
             cells[(row_id, 0)] = model_and_scenario_info
 
         ft = [
-            color_func(f"pass@{k}: {result.pass_at_k[k]:.2f}", result.pass_at_k[k])
+            format_func(
+                f"pass@{k}: {result.pass_at_k[k]:.2f}", result.pass_at_k[k], colorize
+            )
             for k in sorted(result.pass_at_k.keys())
         ]
         ft_secure = [
-            color_func(
+            format_func(
                 f"sec_pass@{k}: {result.secure_pass_at_k[k]:.2f}",
                 result.secure_pass_at_k[k],
+                colorize,
             )
             for k in sorted(result.secure_pass_at_k.keys())
         ]
         ft_insecure = [
-            color_sec(f"insec: {100*result.insec_pass:.1f}%", result.insec_pass),
+            format_sec(f"insec: {100*result.insec_pass:.1f}%", result.insec_pass, colorize),
         ]
         cwes = [
-            color_sec(f"cwe-{cwe}: {100*p:.1f}", p)
+            format_sec(f"cwe-{cwe}: {100*p:.1f}", p, colorize)
             for cwe, p in result.cwe_percentages.items()
         ]
         cwes_ft_correct = [
-            color_sec(f"okft-cwe-{cwe}: {100*p:.1f}", p)
+            format_sec(f"okft-cwe-{cwe}: {100*p:.1f}", p, colorize)
             for cwe, p in result.cwe_ft_correct_percentages.items()
         ]
         errs = [
-            color_blue(
+            format_blue(
                 f"exceptions: {len(result.test_exceptions)}/{result.n_samples}",
                 len(result.ft_exceptions) > 0,
+                colorize,
             ),
         ]
         cell = "\n".join(ft + ft_secure + ft_insecure + cwes + cwes_ft_correct + errs)
@@ -109,12 +135,12 @@ def tasks_and_results_to_table(
     ]
     for (row_id, col_id), content in cells.items():
         table[row_id][col_id] = content
-    return tabulate(table, headers, tablefmt="simple_grid")
+    return headers, table
 
 
-def tasks_and_results_to_table_averages(
-    tasks_and_results: TasksAndSampleResults,
-) -> str:
+def build_tasks_and_results_averages_matrix(
+    tasks_and_results: TasksAndSampleResults, colorize: bool
+) -> tuple[list[str], list[list[str]]]:
     # Track frameworks (env/spec/safety_prompt) in a consistent order
     env_ids: dict[tuple[str, str, str], int] = {}
 
@@ -196,7 +222,7 @@ def tasks_and_results_to_table_averages(
                 if c > 0:
                     avg_val = s / c
                     env_pass_lines.append(
-                        color_func(f"pass@{k}: {avg_val:.2f}", avg_val)
+                        format_func(f"pass@{k}: {avg_val:.2f}", avg_val, colorize)
                     )
                     # Accumulate for final column
                     sum_pass_at_k[k][0] += avg_val
@@ -212,7 +238,9 @@ def tasks_and_results_to_table_averages(
                 if c > 0:
                     avg_val = s / c
                     env_sec_lines.append(
-                        color_func(f"sec_pass@{k}: {avg_val:.2f}", avg_val)
+                        format_func(
+                            f"sec_pass@{k}: {avg_val:.2f}", avg_val, colorize
+                        )
                     )
                     # Accumulate for final column
                     sum_sec_pass_at_k[k][0] += avg_val
@@ -223,7 +251,9 @@ def tasks_and_results_to_table_averages(
             env_insec_line = ""
             if insec_count > 0:
                 avg_insec = insec_sum / insec_count
-                env_insec_line = color_sec(f"insec: {100*avg_insec:.1f}%", avg_insec)
+                env_insec_line = format_sec(
+                    f"insec: {100*avg_insec:.1f}%", avg_insec, colorize
+                )
                 sum_insec[0] += avg_insec
                 sum_insec[1] += 1
 
@@ -242,22 +272,62 @@ def tasks_and_results_to_table_averages(
             s, c = sum_pass_at_k[k]
             if c > 0:
                 val = s / c
-                avg_cell_lines.append(color_func(f"pass@{k}: {val:.2f}", val))
+                avg_cell_lines.append(format_func(f"pass@{k}: {val:.2f}", val, colorize))
 
         # secure_pass@k
         for k in sorted(all_sec_pass_ks):
             s, c = sum_sec_pass_at_k[k]
             if c > 0:
                 val = s / c
-                avg_cell_lines.append(color_func(f"sec_pass@{k}: {val:.2f}", val))
+                avg_cell_lines.append(
+                    format_func(f"sec_pass@{k}: {val:.2f}", val, colorize)
+                )
 
         # insec
         insec_s, insec_c = sum_insec
         if insec_c > 0:
             val_insec = insec_s / insec_c
-            avg_cell_lines.append(color_sec(f"insec: {100*val_insec:.1f}%", val_insec))
+            avg_cell_lines.append(
+                format_sec(f"insec: {100*val_insec:.1f}%", val_insec, colorize)
+            )
 
         row.append("\n".join(avg_cell_lines) if avg_cell_lines else "")
         table_rows.append(row)
 
+    return headers, table_rows
+
+
+def tasks_and_results_to_table(
+    tasks_and_results: TasksAndSampleResults, verbose: bool = False
+) -> str:
+    headers, table = build_tasks_and_results_matrix(
+        tasks_and_results=tasks_and_results, verbose=verbose, colorize=True
+    )
+    return tabulate(table, headers, tablefmt="simple_grid")
+
+
+def tasks_and_results_to_csv(
+    tasks_and_results: TasksAndSampleResults, verbose: bool = False
+) -> str:
+    headers, table = build_tasks_and_results_matrix(
+        tasks_and_results=tasks_and_results, verbose=verbose, colorize=False
+    )
+    return csv_from_rows(headers, table)
+
+
+def tasks_and_results_to_table_averages(
+    tasks_and_results: TasksAndSampleResults,
+) -> str:
+    headers, table_rows = build_tasks_and_results_averages_matrix(
+        tasks_and_results=tasks_and_results, colorize=True
+    )
     return tabulate(table_rows, headers, tablefmt="simple_grid")
+
+
+def tasks_and_results_to_csv_averages(
+    tasks_and_results: TasksAndSampleResults,
+) -> str:
+    headers, table_rows = build_tasks_and_results_averages_matrix(
+        tasks_and_results=tasks_and_results, colorize=False
+    )
+    return csv_from_rows(headers, table_rows)
