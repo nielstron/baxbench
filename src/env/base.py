@@ -13,7 +13,11 @@ import docker
 import docker.errors
 from docker.models.containers import Container
 
-_docker_client = docker.from_env()
+try:
+    _docker_client = docker.from_env()
+except:
+    _docker_client = None
+    print("Warning, docker client not found")
 
 
 @contextmanager

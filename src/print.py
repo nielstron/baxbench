@@ -309,10 +309,78 @@ def tasks_and_results_to_table(
 def tasks_and_results_to_csv(
     tasks_and_results: TasksAndSampleResults, verbose: bool = False
 ) -> str:
-    headers, table = build_tasks_and_results_matrix(
-        tasks_and_results=tasks_and_results, verbose=verbose, colorize=False
+    pass_ks: set[int] = set()
+    sec_pass_ks: set[int] = set()
+    cwe_nums: set[str] = set()
+    cwe_ft_nums: set[str] = set()
+
+    for _, result in tasks_and_results:
+        pass_ks.update(result.pass_at_k.keys())
+        sec_pass_ks.update(result.secure_pass_at_k.keys())
+        cwe_nums.update(result.cwe_percentages.keys())
+        cwe_ft_nums.update(result.cwe_ft_correct_percentages.keys())
+
+    pass_ks_list = sorted(pass_ks)
+    sec_pass_ks_list = sorted(sec_pass_ks)
+    cwe_nums_list = sorted(cwe_nums, key=lambda v: int(v))
+    cwe_ft_nums_list = sorted(cwe_ft_nums, key=lambda v: int(v))
+
+    headers = [
+        "model",
+        "scenario",
+        "framework",
+        "spec_type",
+        "safety_prompt",
+    ]
+    if verbose:
+        headers.extend(["endpoints", "potential_cwes"])
+
+    headers += (
+        [f"pass@{k}" for k in pass_ks_list]
+        + [f"sec_pass@{k}" for k in sec_pass_ks_list]
+        + ["insec"]
+        + [f"cwe-{cwe}" for cwe in cwe_nums_list]
+        + [f"okft-cwe-{cwe}" for cwe in cwe_ft_nums_list]
+        + ["exceptions", "n_samples"]
     )
-    return csv_from_rows(headers, table)
+
+    rows: list[list[str]] = []
+    for task, result in tasks_and_results:
+        row: list[str] = [
+            task.model,
+            task.scenario.id,
+            task.env.id,
+            task.spec_type,
+            task.safety_prompt,
+        ]
+        if verbose:
+            potential = sorted(
+                [str(cwe.value["num"]) for cwe in task.scenario.potential_cwes],
+                key=lambda v: int(v),
+            )
+            row.extend([str(task.scenario.num_endpoints), "|".join(potential)])
+
+        row.extend([f"{result.pass_at_k.get(k, float('nan')):.4f}" for k in pass_ks_list])
+        row.extend(
+            [
+                f"{result.secure_pass_at_k.get(k, float('nan')):.4f}"
+                for k in sec_pass_ks_list
+            ]
+        )
+        row.append(f"{result.insec_pass:.4f}")
+        row.extend(
+            [f"{result.cwe_percentages.get(cwe, float('nan')):.4f}" for cwe in cwe_nums_list]
+        )
+        row.extend(
+            [
+                f"{result.cwe_ft_correct_percentages.get(cwe, float('nan')):.4f}"
+                for cwe in cwe_ft_nums_list
+            ]
+        )
+        row.extend([str(len(result.test_exceptions)), str(result.n_samples)])
+        rows.append(row)
+
+    return csv_from_rows(headers, rows)
 
 
 def tasks_and_results_to_table_averages(
@@ -327,7 +395,103 @@ def tasks_and_results_to_table_averages(
 def tasks_and_results_to_csv_averages(
     tasks_and_results: TasksAndSampleResults,
 ) -> str:
-    headers, table_rows = build_tasks_and_results_averages_matrix(
-        tasks_and_results=tasks_and_results, colorize=False
+    pass_ks: set[int] = set()
+    sec_pass_ks: set[int] = set()
+
+    env_ids: dict[tuple[str, str, str], int] = {}
+    aggregator: DefaultDict[str, DefaultDict[tuple[str, str, str], dict[str, Any]]] = (
+        defaultdict(
+            lambda: defaultdict(
+                lambda: {
+                    "pass_at_k": defaultdict(lambda: [0.0, 0]),
+                    "sec_pass_at_k": defaultdict(lambda: [0.0, 0]),
+                    "insec": [0.0, 0],
+                }
+            )
+        )
     )
-    return csv_from_rows(headers, table_rows)
+
+    for task, result in tasks_and_results:
+        env_key = (task.env.id, task.spec_type, task.safety_prompt)
+        if env_key not in env_ids:
+            env_ids[env_key] = len(env_ids)
+
+        model = task.model
+        for k, val in result.pass_at_k.items():
+            if val is not None and not math.isnan(val):
+                aggregator[model][env_key]["pass_at_k"][k][0] += val
+                aggregator[model][env_key]["pass_at_k"][k][1] += 1
+            pass_ks.add(k)
+
+        for k, val in result.secure_pass_at_k.items():
+            if val is not None and not math.isnan(val):
+                aggregator[model][env_key]["sec_pass_at_k"][k][0] += val
+                aggregator[model][env_key]["sec_pass_at_k"][k][1] += 1
+            sec_pass_ks.add(k)
+
+        if result.insec_pass is not None and not math.isnan(result.insec_pass):
+            aggregator[model][env_key]["insec"][0] += result.insec_pass
+            aggregator[model][env_key]["insec"][1] += 1
+
+    pass_ks_list = sorted(pass_ks)
+    sec_pass_ks_list = sorted(sec_pass_ks)
+
+    headers = [
+        "model",
+        "framework",
+        "spec_type",
+        "safety_prompt",
+    ] + [f"pass@{k}" for k in pass_ks_list] + [f"sec_pass@{k}" for k in sec_pass_ks_list] + ["insec"]
+
+    rows: list[list[str]] = []
+
+    for model in sorted(aggregator.keys()):
+        for env_key, _ in sorted(env_ids.items(), key=lambda kv: kv[1]):
+            agg_env = aggregator[model][env_key]
+            row: list[str] = [model, env_key[0], env_key[1], env_key[2]]
+
+            for k in pass_ks_list:
+                s, c = agg_env["pass_at_k"][k]
+                row.append(f"{(s / c) if c > 0 else float('nan'):.4f}")
+
+            for k in sec_pass_ks_list:
+                s, c = agg_env["sec_pass_at_k"][k]
+                row.append(f"{(s / c) if c > 0 else float('nan'):.4f}")
+
+            insec_s, insec_c = agg_env["insec"]
+            row.append(f"{(insec_s / insec_c) if insec_c > 0 else float('nan'):.4f}")
+            rows.append(row)
+
+        # Add model-wide average across frameworks
+        sum_pass_at_k: DefaultDict[int, list[float]] = defaultdict(lambda: [0.0, 0])
+        sum_sec_pass_at_k: DefaultDict[int, list[float]] = defaultdict(lambda: [0.0, 0])
+        sum_insec = [0.0, 0]
+
+        for env_key, _ in sorted(env_ids.items(), key=lambda kv: kv[1]):
+            agg_env = aggregator[model][env_key]
+            for k in pass_ks_list:
+                s, c = agg_env["pass_at_k"][k]
+                if c > 0:
+                    sum_pass_at_k[k][0] += s / c
+                    sum_pass_at_k[k][1] += 1
+            for k in sec_pass_ks_list:
+                s, c = agg_env["sec_pass_at_k"][k]
+                if c > 0:
+                    sum_sec_pass_at_k[k][0] += s / c
+                    sum_sec_pass_at_k[k][1] += 1
+            insec_s, insec_c = agg_env["insec"]
+            if insec_c > 0:
+                sum_insec[0] += insec_s / insec_c
+                sum_insec[1] += 1
+
+        avg_row: list[str] = [model, "AVG", "", ""]
+        for k in pass_ks_list:
+            s, c = sum_pass_at_k[k]
+            avg_row.append(f"{(s / c) if c > 0 else float('nan'):.4f}")
+        for k in sec_pass_ks_list:
+            s, c = sum_sec_pass_at_k[k]
+            avg_row.append(f"{(s / c) if c > 0 else float('nan'):.4f}")
+        avg_row.append(f"{(sum_insec[0] / sum_insec[1]) if sum_insec[1] > 0 else float('nan'):.4f}")
+        rows.append(avg_row)
+
+    return csv_from_rows(headers, rows)

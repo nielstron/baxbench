@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "cafe823913ed70f4f4e1bdb5663bb122125741c8d2ede6833744ef20d1e71ea1"
+            "sha256": "4b906dc86cd0e9e1c2bc9d91d885520c09d2639bbc6b2eda6bcbb4e2dacacede"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -437,6 +437,24 @@
             ],
             "markers": "python_version >= '3.6'",
             "version": "==1.9.0"
+        },
+        "docker": {
+            "hashes": [
+                "sha256:ad8c70e6e3f8926cb8a92619b832b4ea5299e2831c14284663184e200546fa6c",
+                "sha256:c96b93b7f0a746f9e77d325bcfb87422a3d8bd4f03136ae8a85b37f1898d5fc0"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==7.1.0"
+        },
+        "docker-stubs": {
+            "hashes": [
+                "sha256:2a871c8b504cd6bc9aeaa40126c25195ff7c51d5fb8b0d2877a7c7957e6518c4",
+                "sha256:4444f75b2ae6bd06370b0c2afb5ac9351409180d388c443c601e0ba319eb6b5b"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8' and python_version < '4.0'",
+            "version": "==0.1.0"
         },
         "docstring-parser": {
             "hashes": [
@@ -1170,15 +1188,6 @@
             ],
             "markers": "python_version >= '3.10'",
             "version": "==4.5.1"
-        },
-        "podman": {
-            "hashes": [
-                "sha256:70d0d53dbc04b6539b027e58075f2d88936df04b2f1465cb34ed518c885dd46f",
-                "sha256:9314e8d782a76266dfafe7d0f72645f32031b1029a0428fd197dead5c05926a0"
-            ],
-            "index": "pypi",
-            "markers": "python_version >= '3.9'",
-            "version": "==5.7.0"
         },
         "pre-commit": {
             "hashes": [
